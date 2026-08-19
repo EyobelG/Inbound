@@ -67,8 +67,10 @@ Two things that bite on first deploy:
   apply to table owners, so an owner connection silently ignores every policy
   in `0003_rls.sql` — the app will appear to work while enforcing nothing.
 - **`maxInstances` × `PGPOOL_MAX` must stay under your Cloud SQL connection
-  limit.** The defaults (10 × 5 = 50) fit a db-f1-micro; raise the instance tier
-  before raising either number.
+  limit.** The defaults (4 × 5 = 20) fit under the ~25 a shared-core
+  db-f1-micro allows, with headroom for migrations and a psql session. Raise
+  the database tier before raising either number — exhausting connections
+  fails as timeouts under load, not as a clear error.
 
 No service account key is needed anywhere — the backend runs with Application
 Default Credentials, which is why `FIREBASE_SERVICE_ACCOUNT_KEY` is absent from

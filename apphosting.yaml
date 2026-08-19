@@ -12,10 +12,13 @@
 # long-lived key existing anywhere.
 
 runConfig:
-  # Each instance holds its own pg pool (PGPOOL_MAX below), so max instances
-  # times pool size must stay under the Cloud SQL connection limit.
+  # Each instance holds its own pg pool (PGPOOL_MAX below), so maxInstances x
+  # PGPOOL_MAX is the real ceiling on Cloud SQL connections. 4 x 5 = 20 stays
+  # under the ~25 a shared-core (db-f1-micro) instance allows, leaving headroom
+  # for migrations and psql sessions. Raise the database tier BEFORE raising
+  # either number.
   minInstances: 0
-  maxInstances: 10
+  maxInstances: 4
   concurrency: 80
   cpu: 1
   memoryMiB: 512
