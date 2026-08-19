@@ -4,6 +4,17 @@ import { PlannerShell } from "@/components/PlannerShell";
 import type { MbtaLine, Station } from "@/types/domain";
 
 /**
+ * Render per request, never at build time.
+ *
+ * Without this Next prerenders the page, which bakes whatever the database
+ * returned during `next build` into a static file. A database blip mid-deploy
+ * would then freeze the "no stations loaded" empty state into production until
+ * someone triggered another build. The query is cheap and Redis-cached, so
+ * paying for it per request is the right trade.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Stations are loaded server-side and handed to the client shell as props: the
  * list is small, never user-specific, and needed before the first interaction,
  * so fetching it in the browser would only add a spinner.
@@ -46,12 +57,15 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-7xl p-4">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Inbound</h1>
-        <p className="text-sm text-muted-foreground">
-          Two stops, one fair meeting point, no arguing about who travels further.
+      <div className="mb-6 mt-2">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+          Meet in the <span className="text-primary">middle</span>
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+          Fair MBTA meeting points and two-stop date itineraries, scored on
+          crowdsourced noise, lighting, and date-stage fit.
         </p>
-      </header>
+      </div>
 
       {stations.length === 0 ? (
         <div className="space-y-3 rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
@@ -59,8 +73,8 @@ export default async function HomePage() {
           <ol className="list-decimal space-y-1 pl-5">
             <li>
               Copy <code className="font-mono text-xs">.env.example</code> to{" "}
-              <code className="font-mono text-xs">.env.local</code> and fill in your
-              Cloud SQL, Firebase, and Mapbox keys.
+              <code className="font-mono text-xs">.env.local</code> and set{" "}
+              <code className="font-mono text-xs">DATABASE_URL</code>.
             </li>
             <li>
               Apply the schema: <code className="font-mono text-xs">npm run db:migrate</code>

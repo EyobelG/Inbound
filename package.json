@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "seed:stations": "tsx scripts/seed-stations.ts",
     "seed:spots": "tsx scripts/seed-spots.ts",
-    "db:migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f firebase/schema/0001_schema.sql -f firebase/schema/0002_functions.sql -f firebase/schema/0003_rls.sql"
+    "db:migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f firebase/schema/0001_schema.sql -f firebase/schema/0002_functions.sql -f firebase/schema/0003_rls.sql",
+    "seed:demo": "tsx scripts/seed-demo-spots.ts"
   },
   "dependencies": {
     "@upstash/redis": "^1.34.3",
@@ -22,7 +23,7 @@
     "firebase-admin": "^13.0.2",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.469.0",
-    "mapbox-gl": "^3.9.0",
+    "maplibre-gl": "^3.6.2",
     "next": "^15.1.0",
     "pg": "^8.13.1",
     "react": "^19.0.0",
@@ -32,7 +33,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.2",

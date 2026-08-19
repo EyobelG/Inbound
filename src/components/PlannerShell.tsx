@@ -72,8 +72,13 @@ export function PlannerShell({ stations }: { stations: Station[] }) {
 
       setResult(body as GenerateResponse);
       setActivePairing(0);
-    } catch {
-      setError("Network error — check your connection and try again.");
+    } catch (cause) {
+      // Reaching here means fetch itself threw or the body was not JSON - a
+      // genuinely unexpected failure, distinct from the API returning an error
+      // payload, which is handled above. Log the cause so it is diagnosable
+      // rather than swallowed behind a generic message.
+      console.error("[planner] itinerary request failed", cause);
+      setError("Could not reach the planner. Check your connection and try again.");
       setResult(null);
     } finally {
       setIsGenerating(false);
@@ -81,7 +86,7 @@ export function PlannerShell({ stations }: { stations: Station[] }) {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
+    <div className="grid items-start gap-4 lg:grid-cols-[380px_1fr]">
       <div className="space-y-4">
         <MidpointPlannerBar
           stations={stations}
@@ -136,7 +141,10 @@ export function PlannerShell({ stations }: { stations: Station[] }) {
         )}
       </div>
 
-      <div className="h-[70vh] min-h-96 lg:h-[calc(100dvh-8rem)]">
+      {/* The map stays pinned while the itinerary column scrolls: the whole
+          point is seeing where a stop is while you read about it. `items-start`
+          on the grid is what lets a sticky child work inside a grid row. */}
+      <div className="h-[60vh] min-h-80 lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
         <InteractiveDateMap
           lines={lines}
           spots={spots}

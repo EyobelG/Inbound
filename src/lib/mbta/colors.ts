@@ -2,7 +2,7 @@ import type { MbtaLine } from "@/types/domain";
 
 /**
  * Official MBTA line colors. Single source of truth: the Tailwind theme and
- * the Mapbox paint properties both read from here, so a chip and the polyline
+ * the MapLibre paint properties both read from here, so a chip and the polyline
  * it refers to can never drift apart.
  */
 export const MBTA_LINE_COLORS: Record<MbtaLine, string> = {

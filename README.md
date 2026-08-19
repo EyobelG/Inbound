@@ -14,19 +14,61 @@ station. Inbound runs Dijkstra from both origins over the real line graph and
 ranks stations by *fairness first* — a hub costing both people 22 minutes beats
 one costing 8 and 32, even though the totals match.
 
+## Stack
+
+Next.js 15 (App Router, React 19) · Firebase Auth · Cloud SQL for PostgreSQL +
+PostGIS via `pg` · MapLibre GL + OpenFreeMap · Upstash Redis (optional).
+
+The basemap needs **no API key**. MapLibre GL is the open-source fork of Mapbox
+GL JS, and OpenFreeMap serves vector tiles free and unmetered, so the map works
+on a fresh clone with nothing configured. Set `NEXT_PUBLIC_MAP_STYLE` to any
+other MapLibre style URL to override it.
+
 ## Getting started
+
+`DATABASE_URL` is the only value you must set. Everything else degrades
+gracefully — the app boots and renders its own setup instructions rather than
+erroring.
+
+### Local development, no cloud accounts needed
+
+Requires `brew install postgresql@18 postgis` (PostGIS is only built for
+Postgres 17/18 on Homebrew).
 
 ```bash
 npm install
-cp .env.example .env.local     # fill in Supabase, Mapbox, MBTA, Google keys
-npm run db:push                # apply supabase/migrations
-npm run seed:stations          # station graph from the MBTA V3 API
-npm run seed:spots -- --subreddit=boston --limit=100
+cp .env.example .env.local
+./scripts/local-db.sh start    # Postgres + PostGIS on port 55433
+npm run db:migrate             # apply firebase/schema/*.sql
+npm run seed:stations          # 147 real station platforms from the MBTA V3 API
+npm run seed:demo              # fictional spots, so the pipeline has inventory
 npm run dev
 ```
 
-Seeded spots land with `is_verified = false` and are invisible to search until
-reviewed. That's deliberate: an extracted venue name is a lead, not a fact.
+`scripts/local-db.sh` also takes `stop`, `status`, `reset`, and `psql`.
+
+### Against a real database
+
+```bash
+cp .env.example .env.local     # set DATABASE_URL to your Cloud SQL instance
+npm run db:migrate
+npm run seed:stations
+npm run seed:spots -- --subreddit=boston --limit=100   # needs GOOGLE_PLACES_API_KEY
+```
+
+Create the runtime role first, and make sure it is **not** the table owner —
+RLS does not apply to owners, so an owner connection silently ignores every
+policy:
+
+```sql
+create role inbound_app login password '...';
+grant usage on schema public to inbound_app;
+```
+
+Spots from `seed:spots` land with `is_verified = false` and stay invisible to
+search until a human flips the flag. That's deliberate: an extracted venue name
+is a lead, not a fact. `seed:demo` bypasses this with clearly-labelled fictional
+data for local use only.
 
 ## Layout
 
@@ -54,7 +96,6 @@ real project values first.
 ```bash
 npx firebase login
 npx firebase apphosting:secrets:set DATABASE_URL
-npx firebase apphosting:secrets:set MAPBOX_TOKEN
 npx firebase apphosting:secrets:set MBTA_API_KEY
 npx firebase apphosting:secrets:set GOOGLE_PLACES_API_KEY
 npx firebase apphosting:secrets:set UPSTASH_REDIS_REST_TOKEN

@@ -7,13 +7,13 @@ import Map, {
   NavigationControl,
   Popup,
   Source,
-} from "react-map-gl";
-import type { LayerProps } from "react-map-gl";
+} from "react-map-gl/maplibre";
+import type { LayerProps } from "react-map-gl/maplibre";
 import { Plus, Volume2, Footprints } from "lucide-react";
 import { MBTA_LINE_COLORS } from "@/lib/mbta/colors";
 import { cn } from "@/lib/utils";
 import type { LngLat, MbtaLine, Spot, Station } from "@/types/domain";
-import "mapbox-gl/dist/mapbox-gl.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 export interface RouteLeg {
   from: LngLat;
@@ -35,8 +35,17 @@ export interface InteractiveDateMapProps {
 const BOSTON_CENTER = { longitude: -71.0857, latitude: 42.3601, zoom: 12.4 };
 
 /**
+ * OpenFreeMap serves MapLibre vector tiles with no API key, no signup, and no
+ * usage limits, which is why there is no token check anywhere in this file.
+ * Override with NEXT_PUBLIC_MAP_STYLE to point at any other MapLibre style
+ * (a self-hosted Protomaps build, a paid provider) without touching code.
+ */
+const DEFAULT_MAP_STYLE =
+  process.env.NEXT_PUBLIC_MAP_STYLE ?? "https://tiles.openfreemap.org/styles/dark";
+
+/**
  * Walking legs are dashed and animated so they read as "on foot" against the
- * solid subway lines. `line-dasharray` is not animatable in Mapbox GL, so the
+ * solid subway lines. `line-dasharray` is not animatable in MapLibre, so the
  * motion comes from cycling a small set of dash patterns rather than from a
  * transition.
  */
@@ -115,28 +124,12 @@ export function InteractiveDateMap({
     [activeLegs],
   );
 
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  if (!token) {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center rounded-lg border border-border bg-muted p-8 text-sm text-muted-foreground",
-          className,
-        )}
-      >
-        Map unavailable — NEXT_PUBLIC_MAPBOX_TOKEN is not configured.
-      </div>
-    );
-  }
-
   return (
     <div className={cn("relative h-full w-full overflow-hidden rounded-lg", className)}>
       <Map
-        mapboxAccessToken={token}
         initialViewState={BOSTON_CENTER}
-        mapStyle="mapbox://styles/mapbox/dark-v11"
+        mapStyle={DEFAULT_MAP_STYLE}
         onRender={activeLegs.length > 0 ? onRender : undefined}
-        reuseMaps
       >
         <NavigationControl position="top-right" showCompass={false} />
 

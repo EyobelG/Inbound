@@ -138,6 +138,16 @@ app.firebase_uid` → the policies in `0003_rls.sql` read it through
   silently become lexicographic.
 - MBTA line colors live in `src/lib/mbta/colors.ts`; `tailwind.config.ts` imports
   from there. Never redeclare a hex — a chip and its map polyline must not drift.
+- The map is **MapLibre GL + OpenFreeMap**, deliberately keyless — import from
+  `react-map-gl/maplibre`, not `react-map-gl`. Don't reintroduce a token gate:
+  the map must render on a fresh clone. `NEXT_PUBLIC_MAP_STYLE` overrides the
+  basemap if a self-hosted or paid style is ever needed.
+- **`maplibre-gl` is pinned to v3.** react-map-gl 7.x does not actually work
+  with maplibre-gl v4 even though its peer range allows `<5.0.0`: the style and
+  TileJSON load fine and nothing throws, but the vector source never requests
+  tiles, so you get overlays floating on an empty background. Upgrading past v3
+  requires moving to react-map-gl v8 and re-verifying that basemap tiles render
+  — a passing build proves nothing here.
 - Route handlers stay thin: validate with zod, call into `src/lib`, and funnel
   every throw through `toErrorResponse` (`src/lib/api/respond.ts`), which is the
   single error→HTTP translation point. `DomainError` codes map to statuses there.
@@ -146,11 +156,16 @@ app.firebase_uid` → the policies in `0003_rls.sql` read it through
 
 ## Setup
 
-Copy `.env.example` to `.env.local`. The app boots and renders with none of it
-set — the home page shows its own setup instructions rather than a 500, and the
-map falls back to a placeholder without `NEXT_PUBLIC_MAPBOX_TOKEN`. Keep that
-property when touching `page.tsx`: guard on `isDatabaseConfigured()` rather than
-letting a missing env var throw.
+Copy `.env.example` to `.env.local`. `DATABASE_URL` is the only required value;
+the app boots and renders with none of the rest set — the home page shows its
+own setup instructions rather than a 500. Keep that property when touching
+`page.tsx`: guard on `isDatabaseConfigured()` rather than letting a missing env
+var throw.
+
+`./scripts/local-db.sh start` runs a local Postgres 18 + PostGIS cluster on port
+55433 (Homebrew only builds PostGIS for PG 17/18, which is why it pins @18), and
+`npm run seed:demo` fills it with fictional spots so the full pipeline can be
+exercised without a Google Places key.
 
 `FIREBASE_SERVICE_ACCOUNT_KEY` and `GOOGLE_PLACES_API_KEY` are server-only.
 Google photo resources are proxied through `/api/photos/...` specifically so the

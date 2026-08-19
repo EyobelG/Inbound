@@ -42,10 +42,6 @@ env:
     value: your-web-app-id
     availability: [BUILD, RUNTIME]
 
-  - variable: NEXT_PUBLIC_MAPBOX_TOKEN
-    secret: MAPBOX_TOKEN
-    availability: [BUILD, RUNTIME]
-
   # --- Runtime-only secrets ------------------------------------------------
   - variable: DATABASE_URL
     secret: DATABASE_URL

@@ -63,7 +63,10 @@ create type photo_source as enum ('google_places', 'community_upload');
 -- ---------------------------------------------------------------------------
 create table mbta_stations (
   id              uuid primary key default uuid_generate_v4(),
-  gtfs_stop_id    text unique not null,          -- e.g. 'place-davis'
+  -- NOT globally unique: a transfer station appears once per line it serves
+  -- (Downtown Crossing is both red and orange). Uniqueness is the composite
+  -- (gtfs_stop_id, line) below - that is the whole line-platform model.
+  gtfs_stop_id    text not null,                 -- e.g. 'place-davis'
   stop_name       text not null,
   line            mbta_line not null,
   branch          text,                          -- 'ashmont' | 'braintree' | NULL (trunk)

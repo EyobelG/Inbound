@@ -26,7 +26,7 @@ export function StationCombobox({
   value,
   onChange,
   label,
-  placeholder = "Search stations…",
+  placeholder = "Search…",
   excludeStationId,
 }: StationComboboxProps) {
   const [query, setQuery] = useState("");
