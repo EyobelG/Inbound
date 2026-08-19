@@ -1,0 +1,7 @@
+{
+  "apphosting": {
+    "backendId": "inbound",
+    "rootDir": ".",
+    "ignore": ["node_modules", ".git", ".next", "firebase-debug.log"]
+  }
+}

@@ -1,0 +1,69 @@
+# Firebase App Hosting
+#
+# Secrets live in Cloud Secret Manager, never in this file - it is committed.
+# Create each one first:
+#   firebase apphosting:secrets:set DATABASE_URL
+#   firebase apphosting:secrets:set MBTA_API_KEY
+#   firebase apphosting:secrets:set GOOGLE_PLACES_API_KEY
+#   firebase apphosting:secrets:set UPSTASH_REDIS_REST_TOKEN
+#
+# FIREBASE_SERVICE_ACCOUNT_KEY is deliberately absent: the backend runs with
+# Application Default Credentials, so firebase-admin authenticates without a
+# long-lived key existing anywhere.
+
+runConfig:
+  # Each instance holds its own pg pool (PGPOOL_MAX below), so max instances
+  # times pool size must stay under the Cloud SQL connection limit.
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # --- Build-time: NEXT_PUBLIC_* are inlined into the client bundle, so they
+  # --- must be available during the build, and none may be a secret.
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: your-project-id
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: your-web-api-key
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: your-project-id.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: your-web-app-id
+    availability: [BUILD, RUNTIME]
+
+  - variable: NEXT_PUBLIC_MAPBOX_TOKEN
+    secret: MAPBOX_TOKEN
+    availability: [BUILD, RUNTIME]
+
+  # --- Runtime-only secrets ------------------------------------------------
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+    availability: [RUNTIME]
+
+  - variable: MBTA_API_KEY
+    secret: MBTA_API_KEY
+    availability: [RUNTIME]
+
+  - variable: GOOGLE_PLACES_API_KEY
+    secret: GOOGLE_PLACES_API_KEY
+    availability: [RUNTIME]
+
+  - variable: UPSTASH_REDIS_REST_URL
+    value: https://your-instance.upstash.io
+    availability: [RUNTIME]
+
+  - variable: UPSTASH_REDIS_REST_TOKEN
+    secret: UPSTASH_REDIS_REST_TOKEN
+    availability: [RUNTIME]
+
+  - variable: PGPOOL_MAX
+    value: "5"
+    availability: [RUNTIME]
