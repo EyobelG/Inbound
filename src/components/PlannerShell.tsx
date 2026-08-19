@@ -144,7 +144,7 @@ export function PlannerShell({ stations }: { stations: Station[] }) {
       {/* The map stays pinned while the itinerary column scrolls: the whole
           point is seeing where a stop is while you read about it. `items-start`
           on the grid is what lets a sticky child work inside a grid row. */}
-      <div className="h-[60vh] min-h-80 lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)]">
+      <div className="h-[70vh] min-h-96 lg:h-[calc(100dvh-8rem)]">
         <InteractiveDateMap
           lines={lines}
           spots={spots}
