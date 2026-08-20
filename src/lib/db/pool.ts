@@ -38,6 +38,13 @@ export function resolveConnectionString(): string | undefined {
   return undefined;
 }
 
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function createPool(): Pool {
   const connectionString = resolveConnectionString();
   if (!connectionString) {
@@ -51,7 +58,10 @@ function createPool(): Pool {
     // Cloud SQL terminates TLS with its own CA. In production, point
     // PGSSLROOTCERT at the server-ca.pem and drop rejectUnauthorized.
     ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
-    max: Number(process.env.PGPOOL_MAX ?? 10),
+    // `??` is not enough: a variable defined with a blank value is a string,
+    // not undefined, and Number("") is 0 - a pool that can never hand out a
+    // connection. Treat blank and non-numeric as "not set".
+    max: positiveIntEnv("PGPOOL_MAX", 10),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
