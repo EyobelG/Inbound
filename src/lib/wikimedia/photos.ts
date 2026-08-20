@@ -98,6 +98,33 @@ function isArticleAboutThisPlace(
   );
 }
 
+/**
+ * A 429 from Wikimedia. Distinct from an ordinary failure because it says
+ * nothing about the spot being examined - it means we asked too fast. Treating
+ * it as a miss is what let one run burn 797 spots against a closed door and
+ * record zero useful information about any of them.
+ */
+export class RateLimitError extends Error {
+  constructor(readonly retryAfterMs: number) {
+    super(`Wikimedia 429 (retry after ${Math.round(retryAfterMs / 1000)}s)`);
+    this.name = "RateLimitError";
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Wikimedia sends Retry-After as either seconds or an HTTP date. */
+function retryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+}
+
+/** Retries a 429 in place a couple of times before giving up on the batch. */
+const MAX_RETRIES = 2;
+
 async function callApi(
   endpoint: string,
   params: Record<string, string>,
@@ -107,11 +134,23 @@ async function callApi(
   url.searchParams.set("origin", "*");
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!response.ok) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+    if (response.ok) return (await response.json()) as Record<string, unknown>;
+
+    if (response.status === 429) {
+      // Honour Retry-After when offered; otherwise back off exponentially with
+      // jitter, so a batch that trips the limit does not resynchronise and trip
+      // it again in lockstep.
+      const advertised = retryAfterMs(response.headers.get("retry-after"));
+      const backoff = advertised ?? 2000 * 2 ** attempt + Math.random() * 500;
+      if (attempt >= MAX_RETRIES) throw new RateLimitError(backoff);
+      await sleep(backoff);
+      continue;
+    }
+
     throw new Error(`Wikimedia ${response.status}: ${await response.text()}`);
   }
-  return (await response.json()) as Record<string, unknown>;
 }
 
 /** extmetadata ships HTML fragments; cards render plain text. */
@@ -286,6 +325,12 @@ export interface SeedOptions {
    * the next run simply picks up the spots that still have no photo.
    */
   budgetMs?: number;
+  /**
+   * Pause between spots. 150ms was too aggressive: each spot costs one to three
+   * API calls, so a batch of 100 outran Wikimedia's limit and every subsequent
+   * spot 429'd. Unauthenticated clients are asked to stay serial and unhurried.
+   */
+  pauseMs?: number;
   onProgress?: (line: string) => void;
 }
 
@@ -294,9 +339,20 @@ export interface SeedResult {
   attached: number;
   remaining: number;
   timedOut: boolean;
+  /** The batch stopped early because Wikimedia throttled us. */
+  rateLimited: boolean;
 }
 
-/** Spots with no photo of any source, oldest first so runs are deterministic. */
+/**
+ * Spots with no photo of any source: never-attempted first, then the stalest
+ * attempt.
+ *
+ * Ordering by `created_at` alone is what stalled the cron. Nothing recorded a
+ * miss, so every run re-selected the identical first N rows and the queue never
+ * advanced past position N - the museums, all at position 237+, were
+ * unreachable no matter how many times it ran. Ordering by the attempt makes a
+ * run resume where the last one stopped.
+ */
 const PENDING_SPOTS = `
   select s.id,
          s.name,
@@ -304,9 +360,19 @@ const PENDING_SPOTS = `
          st_y(s.location::geometry) as lat,
          st_x(s.location::geometry) as lng
     from spots s
+    left join spot_photo_attempts a on a.spot_id = s.id
    where not exists (select 1 from spot_photos p where p.spot_id = s.id)
-   order by s.created_at
+   order by a.attempted_at asc nulls first, s.created_at
    limit $1
+`;
+
+const RECORD_ATTEMPT = `
+  insert into spot_photo_attempts (spot_id, attempted_at, outcome, detail)
+       values ($1, now(), $2, $3)
+  on conflict (spot_id) do update set
+    attempted_at = excluded.attempted_at,
+    outcome      = excluded.outcome,
+    detail       = excluded.detail
 `;
 
 const REMAINING_SPOTS = `
@@ -332,6 +398,7 @@ export async function attachCommonsPhotos(
     radiusMeters = 120,
     allowGeosearch = false,
     budgetMs = Number.POSITIVE_INFINITY,
+    pauseMs = 400,
     onProgress,
   } = options;
 
@@ -341,6 +408,7 @@ export async function attachCommonsPhotos(
   let attached = 0;
   let examined = 0;
   let timedOut = false;
+  let rateLimited = false;
 
   for (const spot of spots) {
     if (Date.now() - startedAt > budgetMs) {
@@ -362,12 +430,25 @@ export async function attachCommonsPhotos(
         allowGeosearch,
       );
     } catch (error) {
+      // A 429 survived the in-call retries, so the whole batch is throttled.
+      // Abandon it without recording an attempt: we learned nothing about this
+      // spot, and marking it attempted would push it to the back of the queue
+      // unexamined - exactly the silent data loss this rewrite exists to stop.
+      if (error instanceof RateLimitError) {
+        rateLimited = true;
+        examined--;
+        onProgress?.(`  !  rate limited at ${spot.name}; stopping batch`);
+        break;
+      }
       onProgress?.(`  !  ${spot.name}: ${(error as Error).message}`);
+      await db.query(RECORD_ATTEMPT, [spot.id, "error", (error as Error).message.slice(0, 500)]);
       continue;
     }
 
     if (!candidate) {
       onProgress?.(`  -  ${spot.name}: no usable photo`);
+      await db.query(RECORD_ATTEMPT, [spot.id, "no_match", null]);
+      await sleep(pauseMs);
       continue;
     }
 
@@ -390,13 +471,13 @@ export async function attachCommonsPhotos(
         candidate.sourcePageUrl,
       ],
     );
+    await db.query(RECORD_ATTEMPT, [spot.id, "attached", candidate.fileTitle]);
     attached++;
     onProgress?.(`  +  ${spot.name}: ${candidate.fileTitle} (${candidate.license})`);
 
-    // Wikimedia asks unauthenticated clients to stay serial and unhurried.
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await sleep(pauseMs);
   }
 
   const { rows } = await db.query<{ n: string }>(REMAINING_SPOTS);
-  return { examined, attached, remaining: Number(rows[0]!.n), timedOut };
+  return { examined, attached, remaining: Number(rows[0]!.n), timedOut, rateLimited };
 }
