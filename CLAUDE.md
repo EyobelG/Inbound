@@ -101,6 +101,21 @@ app.firebase_uid` → the policies in `0003_rls.sql` read it through
   owners or superusers, so connecting as the migration role silently disables
   every policy. `DATABASE_URL` must use the non-owner `inbound_app` role created
   at the bottom of `0003_rls.sql`.
+- **KNOWN GAP (production, as of the Neon deploy):** the app connects as
+  `neondb_owner`, which owns all 10 tables *and* carries `BYPASSRLS`. All 22
+  policies are therefore inert. This is currently unexploitable — no sign-in UI
+  exists, and every write path requires a verified Firebase ID token that
+  cannot be minted because Firebase is unconfigured — but it **must** be fixed
+  before auth ships. The fix is a non-owner Neon role:
+
+  ```sql
+  create role inbound_app login password '...';
+  grant usage on schema public to inbound_app;
+  grant select, insert, update, delete on all tables in schema public to inbound_app;
+  ```
+
+  then point `DATABASE_URL` at it. Verify with `select rolbypassrls from
+  pg_roles where rolname = current_user` — it must be false.
 - `auth.users` is gone; `app_users` is the local projection of Firebase identity
   that user-owned foreign keys point at. `firebase_uid` is a **text** uid, not a
   UUID. `ensureAppUser` upserts it inside the same transaction as a user's first
