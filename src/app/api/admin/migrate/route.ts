@@ -3,6 +3,7 @@ import path from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getPool } from "@/lib/db/pool";
+import { seedStations } from "@/lib/mbta/seedStations";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
   }
 
   const pool = getPool();
+  const action = request.nextUrl.searchParams.get("action") ?? "migrate";
+
+  if (action === "seed-stations") {
+    const result = await seedStations(pool);
+    return NextResponse.json({ action, ...result });
+  }
+
   const applied: Array<{ file: string; status: string }> = [];
 
   for (const file of SCHEMA_FILES) {
