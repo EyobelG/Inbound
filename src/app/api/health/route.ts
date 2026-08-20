@@ -24,22 +24,28 @@ export async function GET() {
   }
 
   try {
-    const [{ n: stations }] = await query<{ n: string }>(
-      "select count(*)::text as n from mbta_stations",
+    // One round trip: three counts in a single row. `noUncheckedIndexedAccess`
+    // is on, so the row is still guarded rather than indexed blindly.
+    const rows = await query<{ stations: string; spots: string; postgis: string }>(
+      `select (select count(*) from mbta_stations)::text          as stations,
+              (select count(*) from spots where is_verified)::text as spots,
+              postgis_version()                                    as postgis`,
     );
-    const [{ n: spots }] = await query<{ n: string }>(
-      "select count(*)::text as n from spots where is_verified",
-    );
-    const [{ postgis }] = await query<{ postgis: string }>(
-      "select postgis_version() as postgis",
-    );
+
+    const row = rows[0];
+    if (!row) {
+      return NextResponse.json(
+        { database: "error", code: "NO_ROWS", routine: null },
+        { status: 503 },
+      );
+    }
 
     return NextResponse.json({
       database: "connected",
-      postgis,
-      stations: Number(stations),
-      verifiedSpots: Number(spots),
-      ready: Number(stations) > 0,
+      postgis: row.postgis,
+      stations: Number(row.stations),
+      verifiedSpots: Number(row.spots),
+      ready: Number(row.stations) > 0,
     });
   } catch (error) {
     const e = error as { code?: string; routine?: string };
