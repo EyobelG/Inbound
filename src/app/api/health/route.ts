@@ -20,7 +20,19 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ database: "unconfigured", hint: "DATABASE_URL is not set" });
+    // Distinguish "the key was never added" from "the key exists but its value
+    // is blank" - they look identical from the dashboard but need different
+    // fixes. Only presence and length are reported, never any content.
+    const raw = process.env.DATABASE_URL;
+    return NextResponse.json({
+      database: "unconfigured",
+      keyPresent: "DATABASE_URL" in process.env,
+      valueLength: raw === undefined ? null : raw.length,
+      hint:
+        "DATABASE_URL" in process.env
+          ? "The variable exists but its value is blank - re-enter it in Vercel."
+          : "The variable is not reaching this deployment at all.",
+    });
   }
 
   try {
