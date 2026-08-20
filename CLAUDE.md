@@ -133,6 +133,19 @@ app.firebase_uid` → the policies in `0003_rls.sql` read it through
 - Walking time = straight-line × `STREET_DETOUR_FACTOR` (1.35) ÷ 80 m/min. This
   constant is duplicated in `src/lib/geo.ts` and in the SQL helpers — **change
   both together**.
+- **Wikimedia photos must carry attribution.** `spot_photos.source` has a third
+  value, `wikimedia`, for keyless Commons imagery seeded by
+  `npm run seed:wikimedia`. CC-BY / CC-BY-SA make the author, licence, and file
+  page a condition of display, so `spot_photos_source_provenance` (0004) rejects
+  such a row unless all three columns are set, and `DateSpotCard` renders the
+  credit. Removing that credit is a licence violation, not a style change.
+- **A Commons match needs coordinates, not just a name.** The seeder requires
+  the Wikipedia article to be geotagged within 500 m of the spot. Name matching
+  alone put a Volgograd wheat field on "Harvest", Starbucks' Seattle head office
+  on a cafe, and the Vermont factory on a Ben & Jerry's - all articles about a
+  subject rather than a place, and none of them geotagged. The rule costs real
+  matches whose articles lack coordinates; that is the intended trade, because a
+  confident photo of somewhere else is worse than an empty card.
 - `is_verified = false` is the default for seeded rows and search only returns
   verified spots (`spots_verified_idx` is a partial index on that predicate).
   Seeding produces leads; a human flips the flag.

@@ -12,6 +12,10 @@ const config: NextConfig = {
       // target against this allowlist rather than the original URL.
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
       { protocol: "https", hostname: "*.supabase.co" },
+      // Wikimedia Commons serves every file and thumbnail from this one host.
+      // Without it next/image refuses seeded Commons photos in production,
+      // which is exactly where the cold-start imagery has to work.
+      { protocol: "https", hostname: "upload.wikimedia.org" },
     ],
   },
 };

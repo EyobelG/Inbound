@@ -27,7 +27,8 @@ const SPOT_SELECT = `
     coalesce((
       select json_agg(p order by p.display_order)
         from (
-          select id, url, caption, source, display_order
+          select id, url, caption, source, display_order,
+                 attribution, license, source_page_url
             from spot_photos where spot_id = s.id
         ) p
     ), '[]'::json) as photos
@@ -66,8 +67,11 @@ interface RawSpotRow {
     id: string;
     url: string;
     caption: string | null;
-    source: "google_places" | "community_upload";
+    source: "google_places" | "community_upload" | "wikimedia";
     display_order: number;
+    attribution: string | null;
+    license: string | null;
+    source_page_url: string | null;
   }>;
 }
 
@@ -107,6 +111,9 @@ export function mapSpotRow(row: RawSpotRow): Spot {
       caption: p.caption,
       source: p.source,
       displayOrder: p.display_order,
+      attribution: p.attribution,
+      license: p.license,
+      sourcePageUrl: p.source_page_url,
     })),
     topQuote: null,
   };

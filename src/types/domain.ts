@@ -57,8 +57,17 @@ export interface SpotPhoto {
   id: string;
   url: string;
   caption: string | null;
-  source: "google_places" | "community_upload";
+  source: "google_places" | "community_upload" | "wikimedia";
   displayOrder: number;
+  /**
+   * Author, licence, and file page for openly licensed imagery. Populated only
+   * for `wikimedia` rows, where CC-BY / CC-BY-SA make displaying all three a
+   * condition of use rather than a nicety - the database refuses a wikimedia
+   * row that lacks them (`spot_photos_source_provenance`).
+   */
+  attribution: string | null;
+  license: string | null;
+  sourcePageUrl: string | null;
 }
 
 export interface OpeningWindow {
