@@ -16,10 +16,34 @@ declare global {
   var __inboundPool: Pool | undefined;
 }
 
+/**
+ * Connection string, resolved from the names hosting providers actually inject.
+ *
+ * `DATABASE_URL` is ours. `POSTGRES_URL` is what Vercel's Postgres and Neon
+ * marketplace integrations create by default, and requiring a manual copy from
+ * one to the other is a step that silently half-works: the dashboard shows a
+ * populated variable while the app reads an empty one.
+ *
+ * Deliberately a short, documented list - not a prefix search. A fuzzy match
+ * would pick up whichever variable happened to be named closest, which is
+ * worse than failing loudly.
+ */
+const CONNECTION_STRING_VARS = ["DATABASE_URL", "POSTGRES_URL"] as const;
+
+export function resolveConnectionString(): string | undefined {
+  for (const name of CONNECTION_STRING_VARS) {
+    const value = process.env[name];
+    if (value && value.trim().length > 0) return value;
+  }
+  return undefined;
+}
+
 function createPool(): Pool {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = resolveConnectionString();
   if (!connectionString) {
-    throw new Error("Missing required environment variable: DATABASE_URL");
+    throw new Error(
+      `No database connection string. Set one of: ${CONNECTION_STRING_VARS.join(", ")}`,
+    );
   }
 
   return new Pool({
@@ -43,7 +67,7 @@ export function getPool(): Pool {
 }
 
 export function isDatabaseConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL);
+  return resolveConnectionString() !== undefined;
 }
 
 /**

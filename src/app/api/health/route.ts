@@ -23,15 +23,30 @@ export async function GET() {
     // Distinguish "the key was never added" from "the key exists but its value
     // is blank" - they look identical from the dashboard but need different
     // fixes. Only presence and length are reported, never any content.
-    const raw = process.env.DATABASE_URL;
+    // Report which candidate names exist and whether they are blank - never any
+    // content. A key added without a value looks identical to a correct one in
+    // the dashboard but behaves like an unset variable at runtime.
+    const candidates = ["DATABASE_URL", "POSTGRES_URL"];
+    const seen = Object.fromEntries(
+      candidates.map((name) => [
+        name,
+        name in process.env ? `present, length ${(process.env[name] ?? "").length}` : "absent",
+      ]),
+    );
+    // Surface near-miss names (e.g. a marketplace integration configured with a
+    // custom prefix) so a rename is obvious instead of invisible.
+    const nearMisses = Object.keys(process.env).filter(
+      (k) => k !== "DATABASE_URL" && k !== "POSTGRES_URL" && /DATABASE_URL$|POSTGRES_URL$/.test(k),
+    );
+
     return NextResponse.json({
       database: "unconfigured",
-      keyPresent: "DATABASE_URL" in process.env,
-      valueLength: raw === undefined ? null : raw.length,
+      checked: seen,
+      nearMisses,
       hint:
-        "DATABASE_URL" in process.env
-          ? "The variable exists but its value is blank - re-enter it in Vercel."
-          : "The variable is not reaching this deployment at all.",
+        nearMisses.length > 0
+          ? `Found ${nearMisses[0]} - the integration was given a custom prefix. Clear the prefix so it injects DATABASE_URL or POSTGRES_URL.`
+          : "No connection string is reaching this deployment.",
     });
   }
 
