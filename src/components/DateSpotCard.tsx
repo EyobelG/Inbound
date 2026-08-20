@@ -191,6 +191,22 @@ export function DateSpotCard({ spot, activeStage, onAddToRoute, className }: Dat
           {walkMinutes != null && <Badge>{`T: ${walkMinutes} min walk`}</Badge>}
         </div>
 
+        {/*
+          CC-BY / CC-BY-SA permit reuse only with the author, the licence, and a
+          link to the source visible alongside the image, so this credit is a
+          condition of displaying the photo - not decoration to be trimmed.
+        */}
+        {hasPhotos && photos[index]?.source === "wikimedia" && photos[index]?.attribution && (
+          <a
+            href={photos[index]!.sourcePageUrl ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer license"
+            className="absolute bottom-1 right-1 max-w-[85%] truncate rounded bg-black/55 px-1.5 py-0.5 text-[10px] leading-tight text-white/90 hover:text-white"
+          >
+            {`${photos[index]!.attribution} / ${photos[index]!.license}`}
+          </a>
+        )}
+
         {photos.length > 1 && (
           <>
             <button
