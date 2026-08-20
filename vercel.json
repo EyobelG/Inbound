@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "//": "Once daily: the Hobby plan rejects anything more frequent, and a rejected schedule fails the deployment. 16:00 UTC is simply the next slot after this was set up, so the first backfill batch runs the same day rather than the next morning.",
       "path": "/api/admin/seed-photos?limit=100",
       "schedule": "0 16 * * *"
     }
