@@ -55,8 +55,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "seed-spots") {
-    const result = await seedSpotsFromOsm(pool);
-    return NextResponse.json({ action, ...result });
+    try {
+      const result = await seedSpotsFromOsm(pool);
+      return NextResponse.json({ action, ...result });
+    } catch (error) {
+      // An unhandled throw here returns a 500 with an empty body, which tells
+      // the caller nothing. Upstream failures are expected (third-party rate
+      // limits), so report them.
+      return NextResponse.json(
+        { action, error: (error as Error).message },
+        { status: 502 },
+      );
+    }
   }
 
   const applied: Array<{ file: string; status: string }> = [];

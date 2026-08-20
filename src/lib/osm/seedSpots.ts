@@ -10,7 +10,48 @@ import type { PriceTier, SpotCategory } from "@/types/domain";
  * somebody happened to post about - which makes it a better cold start than
  * scraping recommendations and resolving them against a paid geocoder.
  */
-const OVERPASS = "https://overpass-api.de/api/interpreter";
+/**
+ * Overpass rejects clients that do not identify themselves - their usage policy
+ * requires it, and a bare `fetch` from a serverless runtime sends no
+ * User-Agent, which comes back as a 406 rather than anything descriptive.
+ */
+const USER_AGENT = "inbound/0.1 (+https://github.com/EyobelG/Inbound)";
+
+/** Mirrors, tried in order. The main instance throttles cloud egress IPs hard. */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.osm.jp/api/interpreter",
+];
+
+async function runOverpass(query: string): Promise<{ elements: OverpassElement[] }> {
+  const failures: string[] = [];
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": USER_AGENT,
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({ data: query }).toString(),
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        failures.push(`${new URL(endpoint).host}: ${response.status}`);
+        continue;
+      }
+      return (await response.json()) as { elements: OverpassElement[] };
+    } catch (error) {
+      failures.push(`${new URL(endpoint).host}: ${(error as Error).message}`);
+    }
+  }
+
+  throw new Error(`All Overpass endpoints failed - ${failures.join("; ")}`);
+}
 
 /** Boston, Cambridge, Somerville, Brookline - the area the subway actually serves. */
 const BBOX = { south: 42.30, west: -71.18, north: 42.42, east: -71.00 } as const;
@@ -114,15 +155,7 @@ export async function seedSpotsFromOsm(
     out center ${limit};
   `;
 
-  const response = await fetch(OVERPASS, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ data: query }).toString(),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`Overpass failed: ${response.status}`);
-
-  const body = (await response.json()) as { elements: OverpassElement[] };
+  const body = await runOverpass(query);
 
   const names: string[] = [];
   const slugs: string[] = [];
