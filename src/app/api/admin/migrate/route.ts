@@ -4,6 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getPool } from "@/lib/db/pool";
 import { seedStations } from "@/lib/mbta/seedStations";
+import { seedSpotsFromOsm } from "@/lib/osm/seedSpots";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -50,6 +51,11 @@ export async function POST(request: NextRequest) {
 
   if (action === "seed-stations") {
     const result = await seedStations(pool);
+    return NextResponse.json({ action, ...result });
+  }
+
+  if (action === "seed-spots") {
+    const result = await seedSpotsFromOsm(pool);
     return NextResponse.json({ action, ...result });
   }
 
