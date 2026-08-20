@@ -51,12 +51,23 @@ export async function GET() {
   }
 
   try {
-    // One round trip: three counts in a single row. `noUncheckedIndexedAccess`
+    // One round trip: every diagnostic in a single row. `noUncheckedIndexedAccess`
     // is on, so the row is still guarded rather than indexed blindly.
-    const rows = await query<{ stations: string; spots: string; postgis: string }>(
+    const rows = await query<{
+      stations: string;
+      spots: string;
+      postgis: string;
+      bypasses_rls: boolean | null;
+      owned_tables: string;
+    }>(
       `select (select count(*) from mbta_stations)::text          as stations,
               (select count(*) from spots where is_verified)::text as spots,
-              postgis_version()                                    as postgis`,
+              postgis_version()                                    as postgis,
+              (select rolbypassrls from pg_roles
+                where rolname = current_user)                      as bypasses_rls,
+              (select count(*) from pg_tables
+                where schemaname = 'public'
+                  and tableowner = current_user)::text             as owned_tables`,
     );
 
     const row = rows[0];
@@ -67,12 +78,24 @@ export async function GET() {
       );
     }
 
+    // RLS binds only if BOTH are true: the role does not carry BYPASSRLS, and
+    // it owns none of the tables - policies never apply to a table's owner. The
+    // Neon deploy failed on both counts at once, and either alone is enough to
+    // silently disable all 22 policies with no other visible symptom.
+    //
+    // Reported as a boolean rather than `current_user` on purpose: this
+    // endpoint is public, and the role name is infrastructure detail this file
+    // otherwise refuses to emit. The boolean answers the operational question
+    // - is the runtime role safe? - without naming the account.
+    const rlsEnforced = row.bypasses_rls === false && Number(row.owned_tables) === 0;
+
     return NextResponse.json({
       database: "connected",
       postgis: row.postgis,
       stations: Number(row.stations),
       verifiedSpots: Number(row.spots),
       ready: Number(row.stations) > 0,
+      rlsEnforced,
     });
   } catch (error) {
     const e = error as { code?: string; routine?: string };
