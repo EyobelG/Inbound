@@ -38,14 +38,8 @@ const DEFAULT_LIMIT = 25;
  */
 const BUDGET_MS = 50_000;
 
-function isAuthorized(request: NextRequest): boolean {
-  // CRON_SECRET is what Vercel Cron sends automatically; the explicit token is
-  // for driving the initial backfill by hand.
-  const expected = process.env.SEED_PHOTOS_TOKEN ?? process.env.CRON_SECRET;
+function matches(provided: string, expected: string | undefined): boolean {
   if (!expected) return false;
-
-  const header = request.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
 
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
@@ -53,6 +47,28 @@ function isAuthorized(request: NextRequest): boolean {
   // still run the comparison so the check does not leak length via timing.
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Either secret opens the door, and that is deliberate rather than lax.
+ *
+ * Vercel Cron attaches `Authorization: Bearer $CRON_SECRET` only when a
+ * variable of exactly that name exists, so the schedule can only ever present
+ * CRON_SECRET. Accepting just one named variable means the two configurations
+ * silently disagree: set both to different values and every scheduled run 401s
+ * while a hand-driven curl succeeds, which looks like a broken cron rather than
+ * a mismatched secret. SEED_PHOTOS_TOKEN stays available for backfilling by
+ * hand without having to know the cron's secret.
+ */
+function isAuthorized(request: NextRequest): boolean {
+  const header = request.headers.get("authorization") ?? "";
+  if (!header.startsWith("Bearer ")) return false;
+  const provided = header.slice(7);
+
+  return (
+    matches(provided, process.env.SEED_PHOTOS_TOKEN) ||
+    matches(provided, process.env.CRON_SECRET)
+  );
 }
 
 async function run(request: NextRequest) {
