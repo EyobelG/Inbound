@@ -114,6 +114,47 @@ targeted manual/scripted testing ran against the real local app
   correctly-shaped resource passed the regex and reached the upstream fetch —
   confirming the check gates on shape, not merely presence.
 
+### 5. Encryption — field-level, at rest
+
+The TLS fix in step 3 is transport encryption (data in flight); it says
+nothing about data at rest, which is a separate control. `app_users.email` is
+the one column in the schema holding genuine PII, and it's write-mostly — only
+`ensureAppUser` writes it, and until this pass nothing read it back at all —
+so there's no `WHERE email = ...` anywhere in the app to constrain the design.
+That makes randomized authenticated encryption the right choice with no
+deterministic-encryption or searchable-index tradeoff to reason about:
+
+- `src/lib/crypto/piiCipher.ts` — AES-256-GCM, a fresh 96-bit IV per call, key
+  from `PII_ENCRYPTION_KEY` (32 bytes, required at least that long or the
+  module refuses to run). Ciphertext is `base64(iv || authTag || ciphertext)`.
+  The GCM auth tag means a tampered or corrupted stored value fails to
+  decrypt rather than silently returning garbage - it fails closed.
+- `ensureAppUser` (`src/lib/auth.ts`) encrypts before insert; a new
+  `getUserEmail` decrypts, so the round trip has a real caller and isn't
+  write-only-forever. Nothing currently calls `getUserEmail` from a route -
+  no admin UI exists yet that needs it - documented as such rather than
+  wiring it in just to have a caller.
+- No `pgcrypto`/database-side encryption: keeping this in application code
+  means the key is never handed to Postgres, and the approach isn't tied to
+  one provider's crypto extension.
+- `firebase/schema/0006_encrypt_email.sql` documents the column via
+  `COMMENT ON` rather than a type change (ciphertext is still `text`). No
+  backfill: at the time this shipped there was no sign-in UI and no way to
+  mint a verified Firebase token, so `app_users` held no rows with real
+  plaintext email addresses — the same "unexploitable today" reasoning
+  CLAUDE.md already uses for the RLS gap.
+- Verified two ways, not just unit tests: 6 Vitest cases in
+  `piiCipher.test.ts` (round-trip, distinct ciphertext per call, tamper
+  detection, wrong-key rejection, missing/short-key rejection), plus a real
+  run against the local Postgres instance through `ensureAppUser` →
+  `getUserEmail` — confirmed the stored column value is opaque base64, not a
+  visible email address, and that it decrypts back correctly.
+- Deployed the same way as the TLS fix: pushed to a branch, confirmed the
+  preview deployment builds and `/api/health` stays green (nothing imports
+  cleanly-but-breaks-at-runtime), then merged. `PII_ENCRYPTION_KEY` is set on
+  Vercel; the migration itself is a `COMMENT ON` and has no functional effect
+  even if it's never applied to the live database.
+
 ## Findings summary
 
 | Source | Before | After | Real fixes |
