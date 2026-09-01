@@ -8,7 +8,9 @@ came out.
 
 ## Threat model
 
-Inbound is a small Next.js app backed by Cloud SQL Postgres. Identity comes
+Inbound is a small Next.js app; the codebase targets Cloud SQL Postgres, but
+the actual deployed instance is Neon (a documented gap in its own right, see
+below). Identity comes
 from Firebase Auth; authorization is enforced almost entirely in Postgres Row
 Level Security, keyed on a `firebase_uid` the app sets per transaction after
 verifying a bearer token (`withUser()` in `src/lib/db/pool.ts`). The
@@ -61,14 +63,18 @@ full tracked repo (63 files).
 `src/lib/db/pool.ts` set `ssl: { rejectUnauthorized: false }` unconditionally
 for any non-local connection, including production — the code's own comment
 even predicted the fix and it was never done. This disables TLS certificate
-verification against Cloud SQL, leaving the database connection open to a
-MITM presenting any certificate. Fixed by adding `resolveSslConfig()`: given
-`PGSSLROOTCERT`, it verifies against that CA (`rejectUnauthorized: true`);
-without it, it falls back to unverified TLS (still encrypted, not
-verified) and logs a warning rather than staying silent — the intended state
-for that fallback is local dev against a self-signed Postgres, not
-production. That fallback line carries a scoped `// nosemgrep` with the
-reasoning inline, rather than a blanket suppression.
+verification, leaving the database connection open to a MITM presenting any
+certificate. The first pass at a fix assumed a Cloud SQL-style private CA
+(verify against `PGSSLROOTCERT` if set, fall back to unverified otherwise) —
+wrong for what's actually deployed. Checked against Neon's own docs: Neon
+terminates TLS with the public ISRG Root X1 (Let's Encrypt) certificate,
+already in Node's default trust store, so the correct fix is unconditional
+verification (`rejectUnauthorized: true`) with no custom CA at all;
+`PGSSLROOTCERT` remains only as an escape hatch for a provider that does use
+a private CA. Verified against the real production Neon instance before
+merging — pushed to a branch, checked `/api/health` on the resulting preview
+deployment (`"database":"connected"`), then merged and re-checked the same
+endpoint on production once live. No unverified fallback remains.
 
 Honest limitation: Semgrep's generic rulesets don't know what
 `spots_near_station` or the RLS policies are supposed to enforce, so this
