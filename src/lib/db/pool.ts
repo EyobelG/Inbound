@@ -48,29 +48,24 @@ function positiveIntEnv(name: string, fallback: number): number {
 }
 
 /**
- * Cloud SQL terminates TLS with its own CA, which Node doesn't trust by
- * default. Given `PGSSLROOTCERT`, verify the server against it properly
- * (`rejectUnauthorized: true`). Without it, fall back to an unverified TLS
- * connection - still encrypted, but blind to a MITM presenting any
- * certificate - and say so loudly rather than silently accepting the gap.
+ * The production instance is Neon, which - unlike Cloud SQL - terminates TLS
+ * with the public ISRG Root X1 (Let's Encrypt) certificate, already present
+ * in Node's default trust store. So the default here is to verify
+ * (`rejectUnauthorized: true`) with no custom CA at all; `PGSSLROOTCERT` is
+ * an escape hatch only for a provider with a private CA (e.g. real Cloud
+ * SQL), where the server's cert isn't in any public trust store to begin
+ * with. There is deliberately no unverified fallback: an app that can't
+ * verify its database's certificate should fail to connect, not connect
+ * blind to a MITM.
  */
 function resolveSslConfig(): ConnectionOptions | false {
   if (process.env.PGSSLMODE === "disable") return false;
 
   const caPath = process.env.PGSSLROOTCERT?.trim();
-  if (caPath) {
-    return { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true };
-  }
-
-  console.warn(
-    "[db] PGSSLROOTCERT is not set - connecting to Postgres without verifying its " +
-      "certificate. Set PGSSLROOTCERT to the Cloud SQL server-ca.pem before deploying.",
-  );
-  // Reached only when PGSSLROOTCERT is unset - the intended state is local
-  // dev against a Postgres with no CA-signed cert to verify against. The
-  // console.warn above makes the gap visible rather than silent; production
-  // must set PGSSLROOTCERT, which takes the branch above instead.
-  return { rejectUnauthorized: false }; // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+  return {
+    rejectUnauthorized: true,
+    ca: caPath ? readFileSync(caPath, "utf8") : undefined,
+  };
 }
 
 function createPool(): Pool {
