@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import type { ConnectionOptions } from "node:tls";
 
 /**
  * Connection pool against the Cloud SQL Postgres instance backing Firebase
@@ -45,6 +47,32 @@ function positiveIntEnv(name: string, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * Cloud SQL terminates TLS with its own CA, which Node doesn't trust by
+ * default. Given `PGSSLROOTCERT`, verify the server against it properly
+ * (`rejectUnauthorized: true`). Without it, fall back to an unverified TLS
+ * connection - still encrypted, but blind to a MITM presenting any
+ * certificate - and say so loudly rather than silently accepting the gap.
+ */
+function resolveSslConfig(): ConnectionOptions | false {
+  if (process.env.PGSSLMODE === "disable") return false;
+
+  const caPath = process.env.PGSSLROOTCERT?.trim();
+  if (caPath) {
+    return { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true };
+  }
+
+  console.warn(
+    "[db] PGSSLROOTCERT is not set - connecting to Postgres without verifying its " +
+      "certificate. Set PGSSLROOTCERT to the Cloud SQL server-ca.pem before deploying.",
+  );
+  // Reached only when PGSSLROOTCERT is unset - the intended state is local
+  // dev against a Postgres with no CA-signed cert to verify against. The
+  // console.warn above makes the gap visible rather than silent; production
+  // must set PGSSLROOTCERT, which takes the branch above instead.
+  return { rejectUnauthorized: false }; // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+}
+
 function createPool(): Pool {
   const connectionString = resolveConnectionString();
   if (!connectionString) {
@@ -55,9 +83,7 @@ function createPool(): Pool {
 
   return new Pool({
     connectionString,
-    // Cloud SQL terminates TLS with its own CA. In production, point
-    // PGSSLROOTCERT at the server-ca.pem and drop rejectUnauthorized.
-    ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+    ssl: resolveSslConfig(),
     // `??` is not enough: a variable defined with a blank value is a string,
     // not undefined, and Number("") is 0 - a pool that can never hand out a
     // connection. Treat blank and non-numeric as "not set".

@@ -82,3 +82,38 @@ export async function authedFetch(input: RequestInfo | URL, init: RequestInit = 
 
   return fetch(input, { ...init, headers });
 }
+
+/**
+ * Like `authedFetch`, but first exchanges the current Firebase ID token for a
+ * short-lived, scoped app token (`POST /api/auth/token`) and attaches it as
+ * `X-App-Token`. Use this for routes that require one - currently just
+ * reviews submission. Throws if the caller isn't signed in, since these
+ * scopes are never valid for anonymous requests.
+ */
+export async function scopedAuthedFetch(
+  input: RequestInfo | URL,
+  scope: "reviews:write",
+  init: RequestInit = {},
+) {
+  const user = getClientAuth().currentUser;
+  if (!user) {
+    throw new Error("Sign in required for this action.");
+  }
+
+  const idToken = await user.getIdToken();
+  const tokenResponse = await fetch("/api/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ scope }),
+  });
+  if (!tokenResponse.ok) {
+    throw new Error("Could not authorize this action.");
+  }
+  const { token: appToken } = (await tokenResponse.json()) as { token: string };
+
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${idToken}`);
+  headers.set("X-App-Token", appToken);
+
+  return fetch(input, { ...init, headers });
+}

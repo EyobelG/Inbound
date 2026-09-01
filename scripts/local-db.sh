@@ -48,8 +48,24 @@ start() {
     echo "Created database '$DB' with PostGIS"
   fi
 
+  # `postgres` owns every table `0003_rls.sql` creates, so a DATABASE_URL
+  # pointed at it silently bypasses every RLS policy - dev would pass while
+  # exercising none of the authorization the app relies on in production.
+  # Create the same non-owner runtime role the migration documents, so local
+  # dev is a real test of RLS rather than a no-op. `initdb --auth=trust`
+  # above means the password is never actually checked over this local
+  # socket; it exists only so the connection string has one to carry.
+  if ! "$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d "$DB" -tAc \
+      "select 1 from pg_roles where rolname = 'inbound_app'" | grep -q 1; then
+    "$PGBIN/psql" -h 127.0.0.1 -p "$PORT" -U postgres -d "$DB" -q \
+      -c "create role inbound_app login password 'localdev';"
+    echo "Created role 'inbound_app' (non-owner, RLS-enforcing)"
+  fi
+
   echo "Running on port $PORT"
-  echo "DATABASE_URL=postgresql://postgres@127.0.0.1:$PORT/$DB"
+  echo "Migrate as the owner, then point .env.local at inbound_app - see README:"
+  echo "  DATABASE_URL=postgresql://postgres@127.0.0.1:$PORT/$DB npm run db:migrate"
+  echo "  DATABASE_URL=postgresql://inbound_app:localdev@127.0.0.1:$PORT/$DB"
 }
 
 case "${1:-start}" in

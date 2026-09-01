@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { withUser } from "@/lib/db/pool";
 import { ensureAppUser, getAuthedUser } from "@/lib/auth";
+import { verifyAppToken } from "@/lib/auth/appToken";
 import { toErrorResponse } from "@/lib/api/respond";
 import { DATE_STAGES } from "@/types/domain";
 
@@ -40,6 +41,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: { code: "UNAUTHENTICATED", message: "Sign in to leave a review." } },
         { status: 401 },
+      );
+    }
+
+    // Defense-in-depth above RLS: a bare Firebase token authenticates the uid
+    // for up to an hour, but writing a review additionally requires a token
+    // minted for exactly this action (POST /api/auth/token, scope
+    // "reviews:write") and exactly this uid, expiring in 5 minutes.
+    const appToken = request.headers.get("x-app-token");
+    if (!appToken || !(await verifyAppToken(appToken, user.uid, "reviews:write"))) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "Missing or expired authorization for this action.",
+          },
+        },
+        { status: 403 },
       );
     }
 

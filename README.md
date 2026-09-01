@@ -38,12 +38,20 @@ Postgres 17/18 on Homebrew).
 ```bash
 npm install
 cp .env.example .env.local
-./scripts/local-db.sh start    # Postgres + PostGIS on port 55433
-npm run db:migrate             # apply firebase/schema/*.sql
+./scripts/local-db.sh start    # Postgres + PostGIS on port 55433; also creates
+                                # the non-owner `inbound_app` role RLS needs
+DATABASE_URL=postgresql://postgres@127.0.0.1:55433/inbound npm run db:migrate
 npm run seed:stations          # 147 real station platforms from the MBTA V3 API
 npm run seed:demo              # fictional spots, so the pipeline has inventory
 npm run dev
 ```
+
+`db:migrate` runs as `postgres` (the table owner) because creating tables and
+policies requires ownership - that's a one-off migration credential, not what
+the app should ever connect as. Set `.env.local`'s `DATABASE_URL` to the
+`inbound_app` connection string `local-db.sh start` prints, **not** the
+`postgres` one above, so local dev actually exercises RLS instead of silently
+bypassing it the way a table-owner connection always does.
 
 `scripts/local-db.sh` also takes `stop`, `status`, `reset`, and `psql`.
 
