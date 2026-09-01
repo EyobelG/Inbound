@@ -152,6 +152,12 @@ app.firebase_uid` → the policies in `0003_rls.sql` read it through
 - RLS posture: reference data is world-readable, user-generated rows are
   writable only by their author. Seed scripts connect as the owner role and so
   bypass RLS by design; never point application code at that role.
+- **`app_users.email` is AES-256-GCM ciphertext, never plaintext.**
+  Encrypted/decrypted only through `src/lib/crypto/piiCipher.ts`
+  (`ensureAppUser` / `getUserEmail` in `src/lib/auth.ts`) — never read or
+  write that column directly with a raw string. `PII_ENCRYPTION_KEY` must be
+  set for either to succeed. There is no deterministic-encryption tradeoff
+  here because nothing queries `app_users` by email value.
 
 ### Conventions
 

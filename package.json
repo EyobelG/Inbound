@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "seed:stations": "tsx scripts/seed-stations.ts",
     "seed:spots": "tsx scripts/seed-spots.ts",
-    "db:migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f firebase/schema/0001_schema.sql -f firebase/schema/0002_functions.sql -f firebase/schema/0003_rls.sql -f firebase/schema/0004_wikimedia_photos.sql -f firebase/schema/0005_photo_attempts.sql",
+    "db:migrate": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f firebase/schema/0001_schema.sql -f firebase/schema/0002_functions.sql -f firebase/schema/0003_rls.sql -f firebase/schema/0004_wikimedia_photos.sql -f firebase/schema/0005_photo_attempts.sql -f firebase/schema/0006_encrypt_email.sql",
     "seed:demo": "tsx scripts/seed-demo-spots.ts",
     "seed:osm": "tsx scripts/seed-osm-spots.ts",
     "seed:wikimedia": "tsx scripts/seed-wikimedia-photos.ts"
